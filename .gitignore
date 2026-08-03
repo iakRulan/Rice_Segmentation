@@ -1,0 +1,30 @@
+# 模型权重
+weights/
+
+# 提交文件
+submission/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据
+data/
+
+# 日志
+*.log
+logs/
+
+# 系统
+.DS_Store
+Thumbs.db
