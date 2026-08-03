@@ -76,9 +76,10 @@ class CropSegmentationDataset(Dataset):
             return image, img_name
 
 
-def get_training_augmentation(img_size=256):
+def get_training_augmentation(img_size=512):
     """训练数据增强"""
     return A.Compose([
+        A.Resize(img_size, img_size),
         A.RandomRotate90(p=0.5),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
@@ -118,9 +119,10 @@ def get_training_augmentation(img_size=256):
     ], is_check_shapes=False)
 
 
-def get_validation_augmentation(img_size=256):
+def get_validation_augmentation(img_size=512):
     """验证/测试数据增强（仅归一化）"""
     return A.Compose([
+        A.Resize(img_size, img_size),
         A.Normalize(
             mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225]

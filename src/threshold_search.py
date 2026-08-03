@@ -133,18 +133,21 @@ def main():
     if args.mode == 'multi':
         val_dataset = CropSegmentationDataset(
             image_dir=os.path.join(args.data_dir, 'train/image/wheat_rape'),
-            mask_dir=os.path.join(args.data_dir, 'train/label/wheat_rape'),
+            label_dirs=[
+                os.path.join(args.data_dir, 'train/label/wheat'),
+                os.path.join(args.data_dir, 'train/label/rape'),
+            ],
             mode='multi',
             transform=transform,
-            val=True
         )
     else:
         val_dataset = CropSegmentationDataset(
             image_dir=os.path.join(args.data_dir, 'train/image/rice'),
-            mask_dir=os.path.join(args.data_dir, 'train/label/rice'),
+            label_dirs=[
+                os.path.join(args.data_dir, 'train/label/rice'),
+            ],
             mode='single',
             transform=transform,
-            val=True
         )
     
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
