@@ -63,12 +63,14 @@ def _lovasz_per_image_vectorized(logits, labels):
 
 
 class CombinedLoss(nn.Module):
-    def __init__(self, bce=1.0, dice=1.0, lovasz=0.5):
+    def __init__(self, bce=1.0, dice=1.0, lovasz=0.5, focal_gamma=0.0, pos_weight=1.0):
         super().__init__()
         self.bce_w = bce
         self.dice_w = dice
         self.lov_w = lovasz
-        self.bce = nn.BCEWithLogitsLoss()
+        self.focal_gamma = focal_gamma
+        self.pos_weight = pos_weight
+        self.bce = nn.BCEWithLogitsLoss(reduction='none')
         self.smooth = 1.0
 
     def soft_dice(self, logits, target):
@@ -77,8 +79,18 @@ class CombinedLoss(nn.Module):
         inter = (p * t).sum()
         return 1.0 - (2.0 * inter + self.smooth) / (p.sum() + t.sum() + self.smooth)
 
+    def pointwise(self, logits, target):
+        # BCE with optional pos_weight; focal reweights hard examples when gamma>0
+        bce = self.bce(logits, target)  # (B,C,H,W)
+        if self.pos_weight != 1.0:
+            bce = bce * (target * self.pos_weight + (1 - target) * 1.0)
+        if self.focal_gamma > 0:
+            pt = torch.where(target == 1, torch.sigmoid(logits), 1 - torch.sigmoid(logits))
+            bce = bce * ((1 - pt) ** self.focal_gamma)
+        return bce.mean()
+
     def forward(self, logits, target):
-        bce = self.bce(logits, target) * self.bce_w
+        bce = self.pointwise(logits, target) * self.bce_w
         dice = self.soft_dice(logits, target) * self.dice_w
         lov = torch.tensor(0.0, device=logits.device)
         if self.lov_w > 0:
@@ -241,9 +253,12 @@ def main():
     ap.add_argument('--patience', type=int, default=40)
     ap.add_argument('--ema_decay', type=float, default=0.999)
     ap.add_argument('--lovasz_w', type=float, default=0.5, help='weight of lovasz-hinge loss (0 disables)')
+    ap.add_argument('--focal_gamma', type=float, default=0.0, help='focal loss gamma (0 disables focal)')
+    ap.add_argument('--pos_weight', type=float, default=1.0, help='BCE foreground weight (>1 boosts recall)')
     ap.add_argument('--tag', default='strong')
     ap.add_argument('--workers', type=int, default=8)
     ap.add_argument('--data_root', default=DATA, help='train root (e.g. train_plus for self-training)')
+    ap.add_argument('--val_root', default=DATA, help='validation root')
     args = ap.parse_args()
 
     seed = args.seed
@@ -272,7 +287,7 @@ def main():
     print(f'[config] arch={args.arch} encoder={args.encoder} params={n_params/1e6:.1f}M seed={seed}', flush=True)
 
     data_dir = args.data_root
-    val_dir = DATA
+    val_dir = args.val_root
     if args.mode == 'wheat_rape':
         tr_img, tr_lbl = os.path.join(data_dir, 'train/image/wheat_rape'), [
             os.path.join(data_dir, 'train/label/wheat'), os.path.join(data_dir, 'train/label/rape')]
@@ -298,7 +313,8 @@ def main():
                             num_workers=args.workers, pin_memory=True, persistent_workers=True)
     print(f'[data] train={len(train_ds)} val={len(val_ds)}', flush=True)
 
-    criterion = CombinedLoss(bce=1.0, dice=1.0, lovasz=args.lovasz_w)
+    criterion = CombinedLoss(bce=1.0, dice=1.0, lovasz=args.lovasz_w,
+                             focal_gamma=args.focal_gamma, pos_weight=args.pos_weight)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     steps_per_epoch = len(train_loader)
     total_steps = steps_per_epoch * args.epochs
