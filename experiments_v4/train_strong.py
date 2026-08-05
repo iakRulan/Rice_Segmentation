@@ -243,6 +243,7 @@ def main():
     ap.add_argument('--lovasz_w', type=float, default=0.5, help='weight of lovasz-hinge loss (0 disables)')
     ap.add_argument('--tag', default='strong')
     ap.add_argument('--workers', type=int, default=8)
+    ap.add_argument('--data_root', default=DATA, help='train root (e.g. train_plus for self-training)')
     args = ap.parse_args()
 
     seed = args.seed
@@ -270,22 +271,23 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f'[config] arch={args.arch} encoder={args.encoder} params={n_params/1e6:.1f}M seed={seed}', flush=True)
 
-    data_dir = DATA
+    data_dir = args.data_root
+    val_dir = DATA
     if args.mode == 'wheat_rape':
         tr_img, tr_lbl = os.path.join(data_dir, 'train/image/wheat_rape'), [
             os.path.join(data_dir, 'train/label/wheat'), os.path.join(data_dir, 'train/label/rape')]
-        va_img, va_lbl = os.path.join(data_dir, 'val/image/wheat_rape'), [
-            os.path.join(data_dir, 'val/label/wheat'), os.path.join(data_dir, 'val/label/rape')]
+        va_img, va_lbl = os.path.join(val_dir, 'val/image/wheat_rape'), [
+            os.path.join(val_dir, 'val/label/wheat'), os.path.join(val_dir, 'val/label/rape')]
         mode = 'multi'
     elif args.mode in ('wheat', 'rape'):
         tr_img, tr_lbl = os.path.join(data_dir, 'train/image/wheat_rape'), [
             os.path.join(data_dir, f'train/label/{args.mode}')]
-        va_img, va_lbl = os.path.join(data_dir, 'val/image/wheat_rape'), [
-            os.path.join(data_dir, f'val/label/{args.mode}')]
+        va_img, va_lbl = os.path.join(val_dir, 'val/image/wheat_rape'), [
+            os.path.join(val_dir, f'val/label/{args.mode}')]
         mode = 'single'
     else:
         tr_img, tr_lbl = os.path.join(data_dir, 'train/image/rice'), [os.path.join(data_dir, 'train/label/rice')]
-        va_img, va_lbl = os.path.join(data_dir, 'val/image/rice'), [os.path.join(data_dir, 'val/label/rice')]
+        va_img, va_lbl = os.path.join(val_dir, 'val/image/rice'), [os.path.join(val_dir, 'val/label/rice')]
         mode = 'single'
 
     train_ds = CropDataset(tr_img, tr_lbl, mode, get_train_aug(args.img_size))

@@ -139,7 +139,8 @@ class Ensemble:
             m.load_state_dict(state)
             self.models.append(m)
         self.device = device
-        self.tfs = tta_transforms([256, 288, 320])
+        _sc = os.environ.get('TTA_SCALES', '256,288,320')
+        self.tfs = tta_transforms([int(s) for s in _sc.split(',')])
 
     def predict(self, image):
         preds = [infer_one(m, image, self.tfs, self.device) for m in self.models]
