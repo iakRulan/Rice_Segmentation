@@ -24,8 +24,10 @@
 
 ## 训练进展（2026-08-05 晚）
 - **r1 (油菜 crop_zoom) 结论 = 负结果**：raw val 0.798（低于 s3 0.815），blend 优化器给它的权重仅 0.025（s7 占 0.885）。**弃用 r1**。smp 不支持 unetpp/mit_b3，trainplus 模型改用 deeplabv3plus/mit_b3。
-- **tp_wr (trainplus wheat_rape, deeplabv3plus/mit_b3, focal) 训练中**：train 5383 / valhold 95，batch 8 eff 24。
-- 之后：**tp_r (trainplus rice, unet/mit_b3, pos_weight 1.3)**。
+- **tp_wr (trainplus wheat_rape, deeplabv3plus/mit_b3, focal) = 巨大成功**：valhold best **0.8980**（wheat 0.900 / rape 0.896），超过 s7 的 0.887。trainplus 路线再次验证。
+- **blend_tp（加入 tp_wr）**：全 val fixed 0.8870 / sweep 0.8883 / **诚实 holdout 0.8856**（比 blend_v3 的 0.8777 +0.008）。权重：wheat tp_wr=0.905，rape tp_wr=0.693+s7=0.261。
+- **tp_r (trainplus rice, unet/mit_b3, pos_weight 1.3) 训练中**：水稻是当前最弱类（0.8495），预计 +0.01。
+- 提交设置（blend_tp 扫描）：wheat t=0.55 pp=(30,30)；rape t=0.55 pp=(0,60)；rice t=0.37 pp=(60,0)。
 
 ## 训练（进行中）
 - `shell/train_rape_r1.sh`：油菜 unet/mit_b3 + crop_zoom 0.5（512 画布前景偏置裁剪）+ focal，目标击败 s3_rape 的 raw val 0.8154。

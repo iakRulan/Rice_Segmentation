@@ -23,10 +23,10 @@ from scipy import ndimage
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from paths import VAL_LBL, TESTA_IMG, PREDS, MASKS
 
-# swept on val with blend_v3 (see outputs/logs/v3_sweep.json)
+# swept on val with blend_tp (see outputs/logs/tp_sweep.json)
 SETTINGS = {
-    'wheat': dict(t=0.51, min_area=0, max_hole=60),
-    'rape': dict(t=0.47, min_area=0, max_hole=60),
+    'wheat': dict(t=0.55, min_area=30, max_hole=30),
+    'rape': dict(t=0.55, min_area=0, max_hole=60),
     'rice': dict(t=0.37, min_area=60, max_hole=0),
 }
 _npz_cache = {}
