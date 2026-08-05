@@ -2,9 +2,26 @@
 
 > 记录每次关键进展，及时 push 到云端 (GitHub: iakRulan/Rice_Segmentation)
 
+> **重要约束**：每天只有一次提交机会。策略 = 持续迭代训练/集成，直到 val 代理分明确足够（预估线上 ≥90）再提交。提交前必须用 valhold 公平验证设置防过拟合。
+
 ## 任务
 作物分割（水稻 rice / 小麦 wheat / 油菜 rape 三独立二分类），指标 = 每图 IoU 均值，目标 90。
 数据：每类 train 4814 / val 664 / testA 664，全部 256×256。油菜目标小且散（中位占 7.7%）。
+
+## 本地复现 + 集成提升（2026-08-05，Windows + RTX 3060 6GB）
+**全流程已在本地复现并大幅提升 val 代理分：**
+| 阶段 | wheat | rape | rice | MEAN |
+|------|-------|------|------|------|
+| 基线复现 blend_repro (v4+ded42) | 0.8902 | 0.8194 | 0.8495 | **0.8530** |
+| blend_v3 (v4+s7+ded42+ded43) fixed | 0.9066 | 0.8760 | 0.8495 | **0.8773** |
+| blend_v3 阈值/后处理扫描 | 0.9078 | 0.8794 | 0.8495 | **0.8789** |
+
+**关键突破**：发现服务器上的 `s7_wheat_rape_mit_b3_42`（伪标签 trainplus + focal γ=2 + pos_weight 1.5 训练）对油菜/小麦极强。油菜 blend 权重扫到 s7=0.7-0.8 最优，小麦 s7=0.5 最优。油菜空图分类器也从 acc 0.934 → 0.977。
+
+**目标面积分析**：油菜非空图前景中位仅 4.9%（小目标，crop_zoom 对症）；小麦 32% 空图；水稻 6% 空图 + 中位 65% 前景（大田块，非小目标问题）。
+
+## 训练（进行中）
+- `shell/train_rape_r1.sh`：油菜 unet/mit_b3 + crop_zoom 0.5（512 画布前景偏置裁剪）+ focal，目标击败 s3_rape 的 raw val 0.8154。
 
 ## 线上得分（2026-08-05 首次提交）
 **Final = 0.8674**（小麦 0.8955 / 油菜 0.8373 / 水稻 0.8695）。线上比 val 代理（0.853）高 ~0.015。距 90 还差 +0.0326。
@@ -34,8 +51,11 @@
 - 提交：`/root/make_testA_submission.py`；伪标签：`/root/gen_pseudo_train.py`
 - 评估：`/root/eval_final_sweep.py` / `clf_th_fast.py` / `diag_empty.py`
 
-## 关键文件
-- 训练：`/root/train_strong.py`（lovasz 已开）
-- 集成推理：`/root/infer_ensemble.py`；配置 `cfg_multi_v4.json` / `cfg_rice_v4.json`
-- 评估：`/root/eval_final_sweep.py` / `eval_scores.py`；空图分类器 `train_empty_clf.py` / `ens_features.py`
-- 权重：`/root/crop_segmentation/weights/*_best.pth`
+## 本地关键文件
+- 环境：`pyproject.toml`（uv，缓存/解释器在项目 `.uv-cache`/`.uv-python`），python `.venv/Scripts/python.exe`
+- 推理：`scripts/local_ensemble.py`（内存安全，适配 6GB，`--subdir` 指定图片目录）
+- 评估：`scripts/local_blend_eval.py --spec configs/blend_v3.json [--fixed|--sweep] [--subset valhold]`
+- 提交：`scripts/local_submission.py --spec <blend> --out_dir outputs/submission`
+- 训练：`scripts/train_local.py`（crop_zoom 小目标增强、focal、梯度累积）
+- 配置：`configs/blend_v3.json`（最优 blend），`configs/blend_repro.json`（基线）
+- 权重：`weights/`（51 文件 6.2GB，从服务器拉到本地）

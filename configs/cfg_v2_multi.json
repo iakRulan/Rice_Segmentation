@@ -1,0 +1,1 @@
+[{"arch": "deeplabv3plus", "encoder": "efficientnet-b3", "weight": "/root/crop_segmentation/weights/v2_best_multi.pth", "classes": 2}]

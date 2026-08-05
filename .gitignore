@@ -1,31 +1,27 @@
-# 模型权重
+# --- 大文件 / 数据（不入库） ---
+data/
 weights/
+public.zip
+submission_final.zip
 
-# 提交文件
-submission/
-
-# Python
+# --- Python 环境（本地） ---
+.venv/
+.uv-cache/
+.uv-python/
 __pycache__/
 *.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# --- 中间产物 ---
+outputs/preds/
+outputs/masks/
+outputs/submission/
+outputs/ckpt/
+*.npz
+*.pth
 
-# 数据
-data/
+# 保留 outputs/logs 里的小结果文件
+!outputs/logs/*.json
 
-# 日志
-*.log
-logs/
-
-# 系统
+# --- 系统 ---
 .DS_Store
 Thumbs.db
-*.pth

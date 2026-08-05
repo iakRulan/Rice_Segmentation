@@ -1,0 +1,3 @@
+[
+  {"arch": "unet", "encoder": "mit_b3", "weight": "/root/crop_segmentation/weights/s3_wheat_mit_b3_43_best.pth", "classes": 1}
+]

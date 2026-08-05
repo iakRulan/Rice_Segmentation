@@ -1,0 +1,6 @@
+[
+  {"arch": "deeplabv3plus", "encoder": "mit_b2", "weight": "/root/crop_segmentation/weights/s2_rice_mit_b2_42_best.pth", "classes": 1},
+  {"arch": "unet", "encoder": "mit_b3", "weight": "/root/crop_segmentation/weights/s2_rice_mit_b3_42_best.pth", "classes": 1},
+  {"arch": "unet", "encoder": "efficientnet-b3", "weight": "/root/crop_segmentation/weights/s2_rice_efficientnetb3_43_best.pth", "classes": 1},
+  {"arch": "unet", "encoder": "efficientnet-b3", "weight": "/root/crop_segmentation/weights/best_rice.pth", "classes": 1}
+]

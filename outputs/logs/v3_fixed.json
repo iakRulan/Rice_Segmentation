@@ -1,0 +1,38 @@
+{
+  "mean": 0.8773462665445463,
+  "per_class": {
+    "wheat": {
+      "method": "fixed",
+      "settings": {
+        "t": 0.45,
+        "min_area": 0,
+        "max_hole": 60
+      },
+      "iou": 0.9065969742216241,
+      "empty": 0.9818181818181818,
+      "nonempty": 0.8322766194106539
+    },
+    "rape": {
+      "method": "fixed",
+      "settings": {
+        "t": 0.55,
+        "min_area": 100,
+        "max_hole": 100
+      },
+      "iou": 0.8759867982905347,
+      "empty": 0.9873817034700315,
+      "nonempty": 0.7742225765559511
+    },
+    "rice": {
+      "method": "fixed",
+      "settings": {
+        "t": 0.53,
+        "min_area": 200,
+        "max_hole": 200
+      },
+      "iou": 0.8494550271214798,
+      "empty": 0.9791666666666666,
+      "nonempty": 0.8135348807858896
+    }
+  }
+}

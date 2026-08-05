@@ -1,0 +1,5 @@
+{
+  "wheat": [["ens_multi_val.npz", 0, 0.4], ["ens_s7_val.npz", 0, 0.3], ["ens_ded_wheat_val.npz", 0, 0.15], ["ens_ded_wheat43_val.npz", 0, 0.15]],
+  "rape":  [["ens_multi_val.npz", 1, 0.4], ["ens_s7_val.npz", 1, 0.3], ["ens_ded_rape_val.npz", 0, 0.15], ["ens_ded_rape43_val.npz", 0, 0.15]],
+  "rice":  [["ens_single_val.npz", 0, 1.0]]
+}

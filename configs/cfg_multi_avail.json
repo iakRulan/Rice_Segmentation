@@ -1,0 +1,5 @@
+[
+  {"arch": "unet", "encoder": "mit_b2", "weight": "/root/crop_segmentation/weights/s2_wheat_rape_mit_b2_42_best.pth", "classes": 2},
+  {"arch": "unet", "encoder": "mit_b3", "weight": "/root/crop_segmentation/weights/s2_wheat_rape_mit_b3_42_best.pth", "classes": 2},
+  {"arch": "unet", "encoder": "efficientnet-b3", "weight": "/root/crop_segmentation/weights/best_wheat_rape.pth", "classes": 2}
+]
