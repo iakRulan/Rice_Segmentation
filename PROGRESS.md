@@ -15,10 +15,17 @@
 | 基线复现 blend_repro (v4+ded42) | 0.8902 | 0.8194 | 0.8495 | **0.8530** |
 | blend_v3 (v4+s7+ded42+ded43) fixed | 0.9066 | 0.8760 | 0.8495 | **0.8773** |
 | blend_v3 阈值/后处理扫描 | 0.9078 | 0.8794 | 0.8495 | **0.8789** |
+| blend_opt 权重优化 (val 拟合) | 0.9255 | 0.8851 | 0.8540 | **0.8882** |
+| **诚实 holdout（一半拟合/一半评估）** | 0.908-0.917 | 0.874-0.883 | 0.842 | **≈0.8777** |
 
-**关键突破**：发现服务器上的 `s7_wheat_rape_mit_b3_42`（伪标签 trainplus + focal γ=2 + pos_weight 1.5 训练）对油菜/小麦极强。油菜 blend 权重扫到 s7=0.7-0.8 最优，小麦 s7=0.5 最优。油菜空图分类器也从 acc 0.934 → 0.977。
+**关键教训**：blend_opt 的 0.8882 是 GBT 空图分类器 val 拟合的假象。诚实 holdout 下 blend_v3 和 blend_opt 都是 **0.8777**——权重优化没有真实增益。真实瓶颈是模型本身，只能靠训练提升。
 
-**目标面积分析**：油菜非空图前景中位仅 4.9%（小目标，crop_zoom 对症）；小麦 32% 空图；水稻 6% 空图 + 中位 65% 前景（大田块，非小目标问题）。
+**下一步**：trainplus(train+85%val) + focal 强路线（s7 证明有效），训练 tp_wr(deeplabv3plus/mit_b3) + tp_r(水稻)。
+
+## 训练进展（2026-08-05 晚）
+- **r1 (油菜 crop_zoom) 结论 = 负结果**：raw val 0.798（低于 s3 0.815），blend 优化器给它的权重仅 0.025（s7 占 0.885）。**弃用 r1**。smp 不支持 unetpp/mit_b3，trainplus 模型改用 deeplabv3plus/mit_b3。
+- **tp_wr (trainplus wheat_rape, deeplabv3plus/mit_b3, focal) 训练中**：train 5383 / valhold 95，batch 8 eff 24。
+- 之后：**tp_r (trainplus rice, unet/mit_b3, pos_weight 1.3)**。
 
 ## 训练（进行中）
 - `shell/train_rape_r1.sh`：油菜 unet/mit_b3 + crop_zoom 0.5（512 画布前景偏置裁剪）+ focal，目标击败 s3_rape 的 raw val 0.8154。

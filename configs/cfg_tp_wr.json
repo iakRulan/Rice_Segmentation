@@ -1,0 +1,3 @@
+[
+  {"arch": "deeplabv3plus", "encoder": "mit_b3", "weight": "outputs/ckpt/tp_wr_wheat_rape_mit_b3_42_best.pth", "classes": 2}
+]

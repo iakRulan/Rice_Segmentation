@@ -1,0 +1,3 @@
+[
+  {"arch": "unet", "encoder": "mit_b3", "weight": "outputs/ckpt/tp_r_rice_mit_b3_42_best.pth", "classes": 1}
+]

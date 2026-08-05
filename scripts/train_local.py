@@ -302,6 +302,7 @@ def main():
     ap.add_argument('--tag', default='local')
     ap.add_argument('--workers', type=int, default=4)
     ap.add_argument('--data_root', default=None)
+    ap.add_argument('--val_root', default=None, help='validation root (e.g. valhold for trainplus)')
     args = ap.parse_args()
 
     seed = args.seed
@@ -312,6 +313,7 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     data_dir = Path(args.data_root) if args.data_root else DATA
+    val_dir = Path(args.val_root) if args.val_root else data_dir
     classes = 2 if args.mode == 'wheat_rape' else 1
     import segmentation_models_pytorch as smp
     kw = dict(encoder_name=args.encoder, encoder_weights='imagenet',
@@ -325,15 +327,15 @@ def main():
 
     if args.mode == 'wheat_rape':
         tr_img, tr_lbl = data_dir / 'train/image/wheat_rape', [data_dir / 'train/label/wheat', data_dir / 'train/label/rape']
-        va_img, va_lbl = data_dir / 'val/image/wheat_rape', [data_dir / 'val/label/wheat', data_dir / 'val/label/rape']
+        va_img, va_lbl = val_dir / 'val/image/wheat_rape', [val_dir / 'val/label/wheat', val_dir / 'val/label/rape']
         mode = 'multi'
     elif args.mode in ('wheat', 'rape'):
         tr_img, tr_lbl = data_dir / 'train/image/wheat_rape', [data_dir / f'train/label/{args.mode}']
-        va_img, va_lbl = data_dir / 'val/image/wheat_rape', [data_dir / f'val/label/{args.mode}']
+        va_img, va_lbl = val_dir / 'val/image/wheat_rape', [val_dir / f'val/label/{args.mode}']
         mode = 'single'
     else:
         tr_img, tr_lbl = data_dir / 'train/image/rice', [data_dir / 'train/label/rice']
-        va_img, va_lbl = data_dir / 'val/image/rice', [data_dir / 'val/label/rice']
+        va_img, va_lbl = val_dir / 'val/image/rice', [val_dir / 'val/label/rice']
         mode = 'single'
 
     train_ds = CropDataset(tr_img, tr_lbl, mode, args.img_size, get_train_aug(args.img_size),

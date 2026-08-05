@@ -1,0 +1,24 @@
+{
+  "wheat": {
+    "sources": [
+      {"name": "multi_v4", "npz": "ens_multi_val.npz", "ch": 0},
+      {"name": "s7", "npz": "ens_s7_val.npz", "ch": 0},
+      {"name": "ded_w42", "npz": "ens_ded_wheat_val.npz", "ch": 0},
+      {"name": "ded_w43", "npz": "ens_ded_wheat43_val.npz", "ch": 0}
+    ]
+  },
+  "rape": {
+    "sources": [
+      {"name": "multi_v4", "npz": "ens_multi_val.npz", "ch": 1},
+      {"name": "s7", "npz": "ens_s7_val.npz", "ch": 1},
+      {"name": "ded_r42", "npz": "ens_ded_rape_val.npz", "ch": 0},
+      {"name": "ded_r43", "npz": "ens_ded_rape43_val.npz", "ch": 0},
+      {"name": "r1_cropzoom", "npz": "ens_r1_rape_val.npz", "ch": 0}
+    ]
+  },
+  "rice": {
+    "sources": [
+      {"name": "rice_v4", "npz": "ens_single_val.npz", "ch": 0}
+    ]
+  }
+}
