@@ -23,11 +23,11 @@ from scipy import ndimage
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from paths import VAL_LBL, TESTA_IMG, PREDS, MASKS
 
-# swept on val with blend_tp (see outputs/logs/tp_sweep.json)
+# swept on val with blend_final (see outputs/logs/final_sweep.json)
 SETTINGS = {
     'wheat': dict(t=0.55, min_area=30, max_hole=30),
     'rape': dict(t=0.55, min_area=0, max_hole=60),
-    'rice': dict(t=0.37, min_area=60, max_hole=0),
+    'rice': dict(t=0.41, min_area=0, max_hole=0),
 }
 _npz_cache = {}
 
@@ -87,6 +87,23 @@ def fit_gbt(imgs, probs, cls):
     ne = (((p > bt).astype(int) == 1) & (y == 0)).sum() / max(1, (y == 0).sum())
     print(f'    [empty {cls}] GBT val acc={best:.4f} th={bt:.2f} empty_correct={ec:.3f} nonempty_err={ne:.3f}')
     return (m, lambda x: m.predict_proba(x)[:, 1], bt)
+
+
+def fit_logistic(imgs, probs, cls):
+    """Logistic empty classifier (rice uses this). Returns (predict_fn, th)."""
+    X = np.array([empty_features(probs[f]) for f in imgs])
+    y = np.array([int((np.array(Image.open(VAL_LBL / cls / f)) > 0).sum() == 0) for f in imgs])
+    w, mu, sd = logistic(X, y)
+    p = proba(X, w, mu, sd)
+    best, bt = 0.0, 0.5
+    for th in np.arange(0.1, 0.9, 0.05):
+        acc = ((p > th).astype(int) == y).mean()
+        if acc > best:
+            best, bt = acc, th
+    ec = (((p > bt).astype(int) == 1) & (y == 1)).sum() / max(1, (y == 1).sum())
+    ne = (((p > bt).astype(int) == 1) & (y == 0)).sum() / max(1, (y == 0).sum())
+    print(f'    [empty {cls}] logistic val acc={best:.4f} th={bt:.2f} empty_correct={ec:.3f} nonempty_err={ne:.3f}')
+    return (lambda X: proba(X, w, mu, sd), float(bt))
 
 
 def pp(mask, min_area, max_hole):
