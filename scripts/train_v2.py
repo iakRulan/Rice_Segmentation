@@ -87,7 +87,7 @@ def foreground_crop(image, mask, size, canvas):
 
 class CropDataset:
     def __init__(self, image_dir, label_dirs, mode, img_size, transform,
-                 crop_zoom=0.0, canvas=None, copy_paste=0.0):
+                 crop_zoom=0.0, canvas=None, copy_paste=0.0, cache=False):
         self.image_dir = image_dir
         self.label_dirs = label_dirs
         self.mode = mode
@@ -97,21 +97,41 @@ class CropDataset:
         self.canvas = canvas if (canvas and crop_zoom > 0) else None
         self.images = sorted(f for f in os.listdir(image_dir) if f.endswith('.png'))
         self.cp = CopyPasteMixer(p=copy_paste, max_objs=3) if copy_paste > 0 else None
+        # memory cache: preload all images+masks into RAM (kills slow-disk I/O)
+        self._img_cache = None
+        self._msk_cache = None
+        if cache:
+            print(f'  caching {len(self.images)} images+masks to RAM ...', flush=True)
+            self._img_cache = [None] * len(self.images)
+            self._msk_cache = [None] * len(self.images)
+            for i, name in enumerate(self.images):
+                self._img_cache[i] = np.array(Image.open(os.path.join(image_dir, name)).convert('RGB'))
+                masks = []
+                for ld in label_dirs:
+                    p = os.path.join(ld, name)
+                    masks.append((np.array(Image.open(p)) > 0).astype(np.float32) if os.path.exists(p)
+                                 else np.zeros(self._img_cache[i].shape[:2], np.float32))
+                self._msk_cache[i] = masks
+            print(f'  cache done ({len(self.images)} images)', flush=True)
 
     def __len__(self):
         return len(self.images)
 
     def _raw(self, idx):
-        """Load image + masks as float arrays (for Copy-Paste source)."""
-        img_name = self.images[idx]
-        image = np.array(Image.open(os.path.join(self.image_dir, img_name)).convert('RGB'))
-        masks = []
-        for ld in self.label_dirs:
-            p = os.path.join(ld, img_name)
-            if os.path.exists(p):
-                masks.append((np.array(Image.open(p)) > 0).astype(np.float32))
-            else:
-                masks.append(np.zeros(image.shape[:2], np.float32))
+        """Load image + masks as float arrays (for Copy-Paste source / aug)."""
+        if self._img_cache is not None:
+            image = self._img_cache[idx].copy()
+            masks = [m.copy() for m in self._msk_cache[idx]]
+        else:
+            img_name = self.images[idx]
+            image = np.array(Image.open(os.path.join(self.image_dir, img_name)).convert('RGB'))
+            masks = []
+            for ld in self.label_dirs:
+                p = os.path.join(ld, img_name)
+                if os.path.exists(p):
+                    masks.append((np.array(Image.open(p)) > 0).astype(np.float32))
+                else:
+                    masks.append(np.zeros(image.shape[:2], np.float32))
         if self.mode == 'multi':
             masks = np.stack(masks, axis=0)
             masks = np.transpose(masks, (1, 2, 0))
@@ -232,6 +252,7 @@ def main():
     ap.add_argument('--aux', action='store_true', help='add image-level classification head')
     ap.add_argument('--copy_paste', type=float, default=0.0, help='Copy-Paste prob')
     ap.add_argument('--swa_k', type=int, default=5, help='top-k checkpoints to average at end (0=off)')
+    ap.add_argument('--cache', action='store_true', help='preload all images+masks into RAM')
     ap.add_argument('--tag', default='v2')
     ap.add_argument('--workers', type=int, default=4)
     ap.add_argument('--data_root', default=None)
@@ -267,14 +288,15 @@ def main():
         mode = 'single'
 
     train_ds = CropDataset(tr_img, tr_lbl, mode, args.img_size, get_train_aug(args.img_size),
-                           args.crop_zoom, args.canvas, args.copy_paste)
+                           args.crop_zoom, args.canvas, args.copy_paste, args.cache)
     val_ds = CropDataset(va_img, va_lbl, mode, args.img_size, get_val_aug(args.img_size))
 
     from torch.utils.data import DataLoader
+    nw = 0 if args.cache else args.workers  # cached dataset is pickled to workers => use main process
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                              num_workers=args.workers, pin_memory=True, drop_last=True)
+                              num_workers=nw, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
-                            num_workers=args.workers, pin_memory=True)
+                            num_workers=nw, pin_memory=True)
     print(f'[data] train={len(train_ds)} val={len(val_ds)}', flush=True)
 
     criterion = MultiTaskLoss(bce=1.0, dice=1.0, lovasz=args.lovasz_w,

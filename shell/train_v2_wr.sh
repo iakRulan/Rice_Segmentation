@@ -20,4 +20,5 @@ $PY scripts/train_v2.py \
   --aux \
   --copy_paste 0.0 \
   --swa_k 5 \
+  --cache \
   --tag v2 2>&1
