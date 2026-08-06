@@ -26,9 +26,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from paths import VAL_LBL, PREDS
 
 SETTINGS = {
-    'wheat': dict(t=0.45, min_area=0, max_hole=60),
-    'rape': dict(t=0.55, min_area=100, max_hole=100),
-    'rice': dict(t=0.53, min_area=200, max_hole=200),
+    'wheat': dict(t=0.55, min_area=30, max_hole=30),
+    'rape': dict(t=0.55, min_area=0, max_hole=60),
+    'rice': dict(t=0.41, min_area=0, max_hole=0),
 }
 PP_GRID = [(0, 0), (30, 30), (60, 60), (100, 100), (60, 0), (0, 60),
            (120, 60), (60, 120), (200, 200)]

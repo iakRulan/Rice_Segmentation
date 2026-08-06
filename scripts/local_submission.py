@@ -86,7 +86,7 @@ def fit_gbt(imgs, probs, cls):
     ec = (((p > bt).astype(int) == 1) & (y == 1)).sum() / max(1, (y == 1).sum())
     ne = (((p > bt).astype(int) == 1) & (y == 0)).sum() / max(1, (y == 0).sum())
     print(f'    [empty {cls}] GBT val acc={best:.4f} th={bt:.2f} empty_correct={ec:.3f} nonempty_err={ne:.3f}')
-    return (m, lambda x: m.predict_proba(x)[:, 1], bt)
+    return (lambda x: m.predict_proba(x)[:, 1], float(bt))
 
 
 def fit_logistic(imgs, probs, cls):
@@ -199,7 +199,7 @@ def main():
         for cls, probs in ta_probs.items():
             s = settings[cls]
             p = probs[f]
-            em = clfs[cls][1](empty_features(p)[None])[0] > clfs[cls][2]
+            em = clfs[cls][0](empty_features(p)[None])[0] > clfs[cls][1]
             m = (p > s['t']).astype(np.uint8)
             if em:
                 m = np.zeros_like(m)
