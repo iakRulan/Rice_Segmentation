@@ -45,7 +45,7 @@ def get_state(ckpt):
 def load_model(c, device):
     m = build_model(c['arch'], c['encoder'], c['classes']).to(device).eval()
     sd = torch.load(c['weight'], map_location=device, weights_only=False)
-    m.load_state_dict(get_state(sd))
+    m.load_state_dict(get_state(sd), strict=False)  # strict=False: tolerate aux cls head in v2 ckpts
     return m
 
 
