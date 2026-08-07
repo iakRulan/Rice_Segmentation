@@ -1,0 +1,3 @@
+[
+  {"arch": "deeplabv3plus", "encoder": "mit_b3", "weight": "outputs/ckpt/v2r_rice_mit_b3_42_best.pth", "classes": 1}
+]

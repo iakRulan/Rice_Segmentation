@@ -1,0 +1,5 @@
+{
+  "wheat": [["ens_v2cp_val.npz", 0, 1.0]],
+  "rape":  [["ens_v2cp_val.npz", 1, 1.0]],
+  "rice":  [["ens_single_val.npz", 0, 1.0]]
+}
