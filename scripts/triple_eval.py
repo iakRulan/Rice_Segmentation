@@ -58,8 +58,15 @@ def main():
     ap.add_argument('--subset', choices=['val', 'valhold'], default='val')
     ap.add_argument('--holdout', action='store_true',
                     help='search on even half, report on odd half (honest)')
+    ap.add_argument('--cls_npz', default=None,
+                    help='npz with aux cls probs (per-image C-vector); used as cls_gate')
     ap.add_argument('--out_json', default=None)
     args = ap.parse_args()
+
+    cls_data = None
+    if args.cls_npz:
+        cls_data = np.load(PREDS / args.cls_npz)
+        print(f'[cls] loaded {args.cls_npz}')
 
     spec = json.load(open(args.spec))
     results = {}
@@ -73,18 +80,26 @@ def main():
             print(f'  (subset=valhold n={len(imgs)})')
         P = np.stack([probs[f] for f in imgs])
         T = np.stack([(np.array(Image.open(VAL_LBL / cls / f)) > 0).astype(np.uint8) for f in imgs])
+        cls_probs = None
+        if cls_data is not None:
+            ch = 0 if cls != 'rape' else (1 if 'wheat_rape' in args.cls_npz else 0)
+            cp = np.array([float(cls_data[f][ch]) if cls_data[f].ndim > 0 else float(cls_data[f]) for f in imgs])
+            cls_probs = cp
 
         if args.holdout:
             fit_idx = np.arange(len(imgs))[0::2]
             ev_idx = np.arange(len(imgs))[1::2]
-            best = search_triple(P[fit_idx], T[fit_idx], verbose=False)
-            r = report(P[ev_idx], T[ev_idx], best)
+            best = search_triple(P[fit_idx], T[fit_idx],
+                                 cls_probs=None if cls_probs is None else cls_probs[fit_idx],
+                                 verbose=False)
+            cp_ev = None if cls_probs is None else cls_probs[ev_idx]
+            r = report(P[ev_idx], T[ev_idx], best, cp_ev)
             print(f'  [honest] IoU={r["iou"]:.4f} empty={r["empty"]:.4f} nonempty={r["nonempty"]:.4f} '
                   f'(search on {len(fit_idx)}, eval on {len(ev_idx)}) settings={best}')
             results[cls] = dict(method='holdout', iou=r['iou'], settings=best)
         else:
-            best = search_triple(P, T, verbose=False)
-            r = report(P, T, best)
+            best = search_triple(P, T, cls_probs=cls_probs, verbose=False)
+            r = report(P, T, best, cls_probs)
             print(f'  [fit-eval] IoU={r["iou"]:.4f} empty={r["empty"]:.4f} nonempty={r["nonempty"]:.4f}')
             results[cls] = dict(method='fiteval', iou=r['iou'], settings=best)
 

@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from paths import DATA, TRAIN_IMG, TRAIN_LBL, TESTA_IMG
 
 SRC = DATA / 'pseudo'
-DST = DATA / 'trainpseudo'
+DST = DATA / 'trainpseudo' / 'train'
 
 for c in ['wheat', 'rape', 'rice']:
     (DST / 'label' / c).mkdir(parents=True, exist_ok=True)

@@ -25,13 +25,15 @@ from paths import load_config, PREDS, VAL_IMG, TESTA_IMG
 NORM = dict(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 
-def build_model(arch, encoder, classes):
+def build_model(arch, encoder, classes, aux=False):
     import segmentation_models_pytorch as smp
     kw = dict(encoder_name=encoder, encoder_weights=None, in_channels=3,
               classes=classes, activation=None)
     table = {'unet': smp.Unet, 'unetpp': smp.UnetPlusPlus,
              'deeplabv3plus': smp.DeepLabV3Plus, 'fpn': smp.FPN,
              'manet': smp.MAnet, 'pan': smp.PAN}
+    if aux:
+        kw['aux_params'] = dict(classes=classes, dropout=0.3, pooling='avg')
     return table[arch](**kw)
 
 
@@ -42,8 +44,8 @@ def get_state(ckpt):
     return sd
 
 
-def load_model(c, device):
-    m = build_model(c['arch'], c['encoder'], c['classes']).to(device).eval()
+def load_model(c, device, aux=False):
+    m = build_model(c['arch'], c['encoder'], c['classes'], aux=aux).to(device).eval()
     sd = torch.load(c['weight'], map_location=device, weights_only=False)
     m.load_state_dict(get_state(sd), strict=False)  # strict=False: tolerate aux cls head in v2 ckpts
     return m
@@ -68,38 +70,49 @@ def make_tta(scales):
 
 
 def infer_one(model, image, tfs, device, target_size=(256, 256)):
-    """image: uint8 (H,W,3). Returns mean (C,256,256) prob over TTA variants.
-
-    Batches the 4 flips of each scale into one forward (fast); falls back to
-    sequential on CUDA OOM (safe for the 6GB laptop GPU).
-    """
+    """image: uint8 (H,W,3). Returns (seg_mean (C,256,256), cls_mean or None).
+    Handles aux models (tuple output)."""
     import torch.nn.functional as F
     scales = sorted({int(k.split('_')[0]) for k in tfs})
-    preds = []
+    segs, clss = [], []
     batch_mode = os.environ.get('ENS_BATCH_TTA', '1') == '1'
     for s in scales:
         group = [(k, pp, tf) for k, (pp, tf) in tfs.items() if k.startswith(f'{s}_')]
         names = [g[0] for g in group]
-        # forward (batched)
         try:
             xs = [g[2](image=g[1](image))['image'] for g in group]
             t = torch.stack(xs).to(device)                       # (4,3,s,s)
             with torch.no_grad(), torch.amp.autocast('cuda'):
-                out = torch.sigmoid(model(t)).float()            # (4,C,s,s)
+                out = model(t)
+                if isinstance(out, (tuple, list)):
+                    seg, cls = out
+                    clss.append(torch.sigmoid(cls).float().cpu().numpy())
+                else:
+                    seg, cls = out, None
+                out = torch.sigmoid(seg).float()                  # (4,C,s,s)
             ok = True
         except torch.cuda.OutOfMemoryError:
             torch.cuda.empty_cache()
             ok = False
         if not ok or not batch_mode:
-            out = []
+            out, cls_out = [], []
             for g in group:
                 aug = g[2](image=g[1](image))
                 t = aug['image'].unsqueeze(0).to(device)
                 with torch.no_grad(), torch.amp.autocast('cuda'):
-                    o = torch.sigmoid(model(t)).float()          # (1,C,s,s)
+                    o = model(t)
+                    if isinstance(o, (tuple, list)):
+                        seg, cl = o
+                        cls_out.append(torch.sigmoid(cl).float().cpu().numpy())
+                        o = seg
+                    else:
+                        o = o
+                    o = torch.sigmoid(o).float()                  # (1,C,s,s)
                 out.append(o)
             out = torch.cat(out, 0)
-        # un-flip
+            if cls_out:
+                clss.append(np.concatenate(cls_out, 0))
+        # un-flip seg
         for i, name in enumerate(names):
             o = out[i]
             if '_hflip' in name:
@@ -108,9 +121,11 @@ def infer_one(model, image, tfs, device, target_size=(256, 256)):
                 o = torch.flip(o, dims=[-2])
             elif '_rot90' in name:
                 o = torch.rot90(o, k=-1, dims=[-2, -1])
-            preds.append(F.interpolate(o.unsqueeze(0), size=target_size,
-                                       mode='bilinear', align_corners=False).squeeze(0).cpu().numpy())
-    return np.mean(preds, axis=0)
+            segs.append(F.interpolate(o.unsqueeze(0), size=target_size,
+                                      mode='bilinear', align_corners=False).squeeze(0).cpu().numpy())
+    seg_mean = np.mean(segs, axis=0)
+    cls_mean = np.mean(clss, axis=0) if clss else None
+    return seg_mean, cls_mean
 
 
 def main():
@@ -124,6 +139,7 @@ def main():
     ap.add_argument('--limit', type=int, default=0, help='smoke test: only first N images')
     ap.add_argument('--subdir', choices=['wheat_rape', 'rice'], default=None,
                     help='image subdir (default: wheat_rape for multi, rice for single)')
+    ap.add_argument('--aux', action='store_true', help='save aux cls logits (v2 models)')
     args = ap.parse_args()
 
     configs = load_config(args.configs)
@@ -138,18 +154,22 @@ def main():
         imgs = imgs[:args.limit]
     names = [f.name for f in imgs]
     print(f'[ens] task={args.task} split={args.split} n_models={len(configs)} '
-          f'scales={scales} n_img={len(imgs)}')
+          f'scales={scales} n_img={len(imgs)} aux={args.aux}')
 
     device = torch.device('cuda')
     C = configs[0]['classes']
     acc = {n: np.zeros((C, 256, 256), np.float32) for n in names}  # running sum
+    acc_cls = {n: np.zeros((C,), np.float32) for n in names} if args.aux else None
 
     for i, c in enumerate(configs):
-        m = load_model(c, device)
+        m = load_model(c, device, aux=args.aux)
         t0 = __import__('time').time()
         for j, f in enumerate(imgs):
             image = np.array(Image.open(f).convert('RGB'))
-            acc[f.name] += infer_one(m, image, tfs, device).astype(np.float32)
+            seg, cls = infer_one(m, image, tfs, device)
+            acc[f.name] += seg.astype(np.float32)
+            if cls is not None:
+                acc_cls[f.name] += cls.mean(0).astype(np.float32)
             if (j + 1) % 300 == 0:
                 print(f'  model{i} {j+1}/{len(imgs)} {__import__("time").time()-t0:.0f}s', flush=True)
         del m
@@ -161,6 +181,11 @@ def main():
     avg = {n: (acc[n] / len(configs)).astype(np.float16) for n in names}
     np.savez(out, **avg)
     print(f'[ens] saved {out} ({len(avg)} imgs, C={C})', flush=True)
+    if acc_cls is not None:
+        out_cls = PREDS / (out.name.replace('.npz', '_cls.npz'))
+        avg_cls = {n: (acc_cls[n] / len(configs)).astype(np.float16) for n in names}
+        np.savez(out_cls, **avg_cls)
+        print(f'[ens] saved cls {out_cls} ({len(avg_cls)} imgs, C={C})', flush=True)
 
 
 if __name__ == '__main__':
