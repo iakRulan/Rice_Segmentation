@@ -1,0 +1,65 @@
+{
+  "name": "satlas_s2tiny_rice_512_seed42",
+  "seed": 42,
+  "output_dir": "weights/v2",
+  "data": {
+    "root": "/root/competition_data/public",
+    "task": "rice",
+    "context_size": 512,
+    "target_size": 256,
+    "grid_width": 83,
+    "normalization": "zero_one",
+    "cache": true
+  },
+  "model": {
+    "backend": "satlas",
+    "model_id": "Sentinel2_SwinT_SI_RGB",
+    "decoder_channels": 128
+  },
+  "train": {
+    "batch_size": 2,
+    "val_batch_size": 4,
+    "accumulation": 2,
+    "workers": 0,
+    "bucket_probs": [0.25, 0.20, 0.30, 0.25],
+    "ema_decay": 0.999,
+    "weight_decay": 0.0001,
+    "warmup_fraction": 0.05,
+    "grad_clip": 1.0
+  },
+  "loss": {
+    "bce": 1.0,
+    "dice": 1.0,
+    "lovasz": 0.5,
+    "tversky": 0.0,
+    "boundary": 0.08,
+    "focal_gamma": 0.0,
+    "pos_weight": 1.0
+  },
+  "stages": [
+    {
+      "name": "decoder_warmup",
+      "epochs": 3,
+      "lr": 0.0003,
+      "backbone_lr_scale": 0.0,
+      "freeze_backbone": true,
+      "patience": 0
+    },
+    {
+      "name": "full_finetune",
+      "epochs": 22,
+      "lr": 0.0001,
+      "backbone_lr_scale": 0.1,
+      "freeze_backbone": false,
+      "patience": 9
+    },
+    {
+      "name": "low_lr_polish",
+      "epochs": 8,
+      "lr": 0.00003,
+      "backbone_lr_scale": 0.2,
+      "freeze_backbone": false,
+      "patience": 5
+    }
+  ]
+}
