@@ -1,0 +1,56 @@
+{
+  "name": "p0_joint_ctx768_3ch",
+  "seed": 42,
+  "output_dir": "weights/p0",
+  "data": {
+    "root": "data/public",
+    "task": "joint",
+    "fold_file": "data/public/folds/folds_iso5.json",
+    "fold": 0,
+    "context_size": 768,
+    "target_size": 256,
+    "grid_width": 83,
+    "cache": false,
+    "temporal": "wheat_rape",
+    "prior": false
+  },
+  "model": {
+    "backend": "smp",
+    "architecture": "unet",
+    "encoder": "mit_b3",
+    "encoder_weights": "imagenet",
+    "in_channels": 3,
+    "aux": true,
+    "init_first_conv": false
+  },
+  "train": {
+    "batch_size": 2,
+    "val_batch_size": 2,
+    "accumulation": 4,
+    "workers": 2,
+    "ema_decay": 0.999,
+    "weight_decay": 0.0001,
+    "warmup_fraction": 0.1,
+    "grad_clip": 1.0
+  },
+  "loss": {
+    "bce": 1.0,
+    "dice": 1.0,
+    "lovasz": 0.5,
+    "tversky": 0.2,
+    "tversky_alpha": 0.35,
+    "tversky_beta": 0.65,
+    "boundary": 0.1,
+    "cls": 0.5
+  },
+  "stages": [
+    {
+      "name": "direction",
+      "epochs": 15,
+      "lr": 0.0003,
+      "backbone_lr_scale": 0.1,
+      "freeze_backbone": false,
+      "patience": 0
+    }
+  ]
+}

@@ -97,6 +97,27 @@ def build_records(root: str | Path, task: TaskSpec, training: bool,
     return [r for r in all_records if (f"{r.split}:{r.name}" in held_out) != training]
 
 
+def build_joint_records(root: str | Path, fold_file: str, fold: int):
+    """Return (train_records, val_records, train_tile_ids) over ALL labeled tiles.
+
+    The original train/val split is dissolved: every labeled tile (5478) is pooled
+    and re-split by the isolated-row fold file. ``train_ids`` is the set of tile
+    ids whose labels are public for this fold (used to build neighbor-row priors:
+    a held-out row's labels must NOT leak into the prior, exactly like testA).
+    """
+    root = Path(root)
+    manifest = json.loads(Path(fold_file).read_text(encoding="utf-8"))
+    held_out = {f"{item['split']}:{item['name']}" for item in manifest["folds"][str(fold)]}
+    all_records = []
+    for split in ("train", "val"):
+        folder = root / split / "image" / "rice"
+        all_records += [Record(split, path.name) for path in sorted(folder.glob("*.png"))]
+    train_records = [r for r in all_records if f"{r.split}:{r.name}" not in held_out]
+    val_records = [r for r in all_records if f"{r.split}:{r.name}" in held_out]
+    train_ids = {tile_id(r.name) for r in train_records}
+    return train_records, val_records, train_ids
+
+
 class MosaicSegDataset(Dataset):
     def __init__(self, root: str | Path, task: TaskSpec, records: Iterable[Record],
                  store: MosaicStore, context_size: int = 512,
@@ -171,6 +192,132 @@ class MosaicImageDataset(Dataset):
         elif self.normalization != "zero_one":
             raise ValueError(f"unknown normalization: {self.normalization}")
         return torch.from_numpy(image.transpose(2, 0, 1)).float(), record.name
+
+
+class MosaicMultiTemporalDataset(Dataset):
+    """Joint 3-class dataset over the two temporals (rice + wheat_rape).
+
+    Input channels:
+      * temporal="dual"  -> 6ch: [rice 3ch | wheat_rape 3ch] at context_size
+      * temporal="wheat_rape" | "rice" -> 3ch from that temporal only
+      * prior=True       -> +3ch neighbor-row label priors (wheat/rape/rice),
+                            center tile's whole row zeroed (mimics testA).
+    Target: center tile's 3 masks (wheat, rape, rice), 256x256.
+    Only flips + rot180 are used for augmentation: rot90 would move the center
+    tile out of the window center and desync image/prior/target.
+    """
+
+    def __init__(self, root: str | Path, records: Iterable[Record],
+                 rice_store: MosaicStore, wr_store: MosaicStore,
+                 train_ids: set[int], context_size: int = 768,
+                 target_size: int = 256, augment: bool = False,
+                 normalization: str = "imagenet",
+                 temporal: str = "dual", prior: bool = True,
+                 grid_width: int = 83):
+        self.root = Path(root)
+        self.records = list(records)
+        self.rice_store = rice_store
+        self.wr_store = wr_store
+        self.train_ids = train_ids
+        self.context_size = context_size
+        self.target_size = target_size
+        self.augment = augment
+        self.normalization = normalization
+        self.temporal = temporal
+        self.prior = prior
+        self.grid_width = grid_width
+        if temporal not in ("rice", "wheat_rape", "dual"):
+            raise ValueError(f"unknown temporal: {temporal!r}")
+        if target_size != 256:
+            raise ValueError("labels are native 256px; target_size currently must be 256")
+
+    def __len__(self) -> int:
+        return len(self.records)
+
+    def _label_paths(self, name: str):
+        for split in ("train", "val"):
+            base = self.root / split / "label"
+            if (base / "wheat" / name).exists():
+                return base, split
+        return self.root / "train" / "label", "train"
+
+    def load_labels(self, tile: int) -> np.ndarray:
+        """(256, 256, 3) float masks [wheat, rape, rice] for one tile."""
+        name = f"clip_{tile:05d}.png"
+        base, _ = self._label_paths(name)
+        masks = []
+        for label in ("wheat", "rape", "rice"):
+            path = base / label / name
+            masks.append((np.asarray(Image.open(path)) > 0).astype(np.float32))
+        return np.stack(masks, axis=-1)
+
+    def build_prior(self, center: int) -> np.ndarray:
+        """768x768x3 neighbor-row labels; the center tile's entire row is zeroed.
+
+        Only rows dy = -1/+1 (immediately above/below) are filled; a neighbor tile
+        whose labels are not public for this fold (held-out/testA/testB/out-of-grid)
+        contributes zero, matching what inference sees.
+        """
+        prior = np.zeros((768, 768, 3), np.float32)
+        row, col = divmod(center - 1, self.grid_width)
+        for dy in (-1, 1):
+            for dx in (-1, 0, 1):
+                rr, cc = row + dy, col + dx
+                neighbor = rr * self.grid_width + cc + 1
+                if neighbor in self.train_ids:
+                    masks = self.load_labels(neighbor)
+                    y0, x0 = (1 + dy) * 256, (1 + dx) * 256
+                    prior[y0:y0 + 256, x0:x0 + 256] = masks
+        start = (768 - self.context_size) // 2
+        return prior[start:start + self.context_size, start:start + self.context_size]
+
+    def _image(self, store: MosaicStore, tile: int) -> np.ndarray:
+        return store.window(tile, self.context_size).astype(np.float32) / 255.0
+
+    def __getitem__(self, index: int):
+        record = self.records[index]
+        tile = tile_id(record.name)
+        if self.temporal == "dual":
+            image = np.concatenate(
+                [self._image(self.rice_store, tile), self._image(self.wr_store, tile)], axis=-1
+            )
+        else:
+            store = self.rice_store if self.temporal == "rice" else self.wr_store
+            image = self._image(store, tile)
+        prior = self.build_prior(tile) if self.prior else None
+        mask = self.load_labels(tile)  # (256, 256, 3)
+
+        if self.augment:
+            k = random.choice((0, 2))  # rot180 keeps the center tile in the center
+            image = np.rot90(image, k).copy()
+            mask = np.rot90(mask, k).copy()
+            if prior is not None:
+                prior = np.rot90(prior, k).copy()
+            if random.random() < 0.5:
+                image, mask = image[:, ::-1].copy(), mask[:, ::-1].copy()
+                if prior is not None:
+                    prior = prior[:, ::-1].copy()
+            if random.random() < 0.5:
+                image, mask = image[::-1].copy(), mask[::-1].copy()
+                if prior is not None:
+                    prior = prior[::-1].copy()
+            if random.random() < 0.5:
+                gain, bias = random.uniform(0.9, 1.1), random.uniform(-10, 10)
+                image = np.clip(image.astype(np.float32) * gain + bias, 0, 255)
+
+        if self.normalization == "imagenet":
+            n_img = image.shape[-1]
+            mean = np.tile(IMAGENET_MEAN, n_img // 3)
+            std = np.tile(IMAGENET_STD, n_img // 3)
+            image = (image - mean) / std
+        elif self.normalization != "zero_one":
+            raise ValueError(f"unknown normalization: {self.normalization}")
+
+        if prior is not None:
+            image = np.concatenate([image, prior], axis=-1)
+        x = torch.from_numpy(image.transpose(2, 0, 1)).float()
+        y = torch.from_numpy(mask.transpose(2, 0, 1)).float()
+        return x, y, record.name
 
 
 def make_area_sampler(dataset: MosaicSegDataset,

@@ -19,6 +19,9 @@ TASKS = {
     "wheat": TaskSpec("wheat", "wheat_rape", ("wheat",)),
     "rape": TaskSpec("rape", "wheat_rape", ("rape",)),
     "rice": TaskSpec("rice", "rice", ("rice",)),
+    # joint: rice + wheat_rape share tile ids (same field, two seasons); predict
+    # all three crops from a 6ch dual-temporal image + optional neighbor-row priors.
+    "joint": TaskSpec("joint", "rice", ("wheat", "rape", "rice")),
 }
 
 

@@ -83,7 +83,7 @@ class SatlasSegmenter(nn.Module):
 
 class SMPModel(nn.Module):
     def __init__(self, architecture: str, encoder: str, classes: int,
-                 encoder_weights: str | None = "imagenet",
+                 encoder_weights: str | None = "imagenet", in_channels: int = 3,
                  aux: bool = False, aux_dropout: float = 0.3):
         super().__init__()
         import segmentation_models_pytorch as smp
@@ -96,7 +96,7 @@ class SMPModel(nn.Module):
         }
         kw = dict(
             encoder_name=encoder, encoder_weights=encoder_weights,
-            in_channels=3, classes=classes, activation=None,
+            in_channels=in_channels, classes=classes, activation=None,
         )
         if aux:
             kw["aux_params"] = dict(classes=classes, dropout=aux_dropout, pooling="avg")
@@ -127,9 +127,30 @@ def build_model(config: dict, classes: int, pretrained: bool = True) -> nn.Modul
         return SMPModel(
             config.get("architecture", "unet"), config["encoder"], classes,
             config.get("encoder_weights", "imagenet") if pretrained else None,
+            in_channels=int(config.get("in_channels", 3)),
             aux=aux, aux_dropout=aux_dropout,
         )
     raise ValueError(f"unknown backend: {backend}")
+
+
+def init_first_conv(model: nn.Module, in_channels: int, n_img: int) -> None:
+    """Expand pretrained RGB first-conv weights to ``n_img`` image channels and
+    zero-initialize the remaining (prior) channels.
+
+    smp/timm widen the entry conv by repeating RGB and scaling by
+    in_channels/3; we undo that scale, split the image signal across the
+    temporals (n_img//3 of them), and start prior channels at zero so the model
+    initially behaves like the no-prior baseline.
+    """
+    conv = next(m for m in model.modules()
+                if isinstance(m, nn.Conv2d) and m.in_channels == in_channels)
+    with torch.no_grad():
+        pre = conv.weight[:, :3].clone() * (conv.in_channels / 3.0)
+        if n_img >= 3:
+            pre = pre / max(1, n_img // 3)
+        for s in range(0, n_img, 3):
+            conv.weight[:, s:s + 3] = pre
+        conv.weight[:, n_img:].zero_()
 
 
 def center_crop(logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:

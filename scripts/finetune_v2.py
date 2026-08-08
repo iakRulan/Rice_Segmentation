@@ -18,10 +18,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from cropseg.config import load_experiment
-from cropseg.data import MosaicSegDataset, MosaicStore, build_records, make_area_sampler
+from cropseg.data import (
+    MosaicMultiTemporalDataset, MosaicSegDataset, MosaicStore,
+    build_joint_records, build_records, make_area_sampler,
+)
 from cropseg.engine import EMA, cosine_with_warmup, train_epoch, validate
 from cropseg.losses import SegmentationLoss
-from cropseg.models import build_model, set_backbone_trainable
+from cropseg.models import build_model, init_first_conv, set_backbone_trainable
 from cropseg.tasks import get_task
 
 
@@ -58,8 +61,14 @@ def main() -> None:
     fold_file = cfg.data.get("fold_file")
     if fold_file:
         fold_file = resolve(fold_file)
-    train_records = build_records(data_root, task, True, fold_file, cfg.data.get("fold"))
-    val_records = build_records(data_root, task, False, fold_file, cfg.data.get("fold"))
+    joint = task.name == "joint"
+    if joint:
+        train_records, val_records, train_ids = build_joint_records(
+            data_root, fold_file, cfg.data.get("fold")
+        )
+    else:
+        train_records = build_records(data_root, task, True, fold_file, cfg.data.get("fold"))
+        val_records = build_records(data_root, task, False, fold_file, cfg.data.get("fold"))
     print(f"[data] task={task.name} train={len(train_records)} val={len(val_records)}")
     if args.dry_run:
         print(json.dumps(cfg.as_dict(), indent=2))
@@ -75,18 +84,32 @@ def main() -> None:
     normalization = cfg.data.get(
         "normalization", "zero_one" if cfg.model["backend"] == "satlas" else "imagenet"
     )
-    store = MosaicStore(
-        data_root, task.domain, int(cfg.data.get("grid_width", 83)),
-        bool(cfg.data.get("cache", False)),
-    )
-    common = dict(
-        root=data_root, task=task, store=store, context_size=context_size,
-        target_size=int(cfg.data.get("target_size", 256)), normalization=normalization,
-    )
-    train_set = MosaicSegDataset(records=train_records, augment=True, **common)
-    val_set = MosaicSegDataset(records=val_records, augment=False, **common)
+    grid_width = int(cfg.data.get("grid_width", 83))
+    cache = bool(cfg.data.get("cache", False))
+    if joint:
+        rice_store = MosaicStore(data_root, "rice", grid_width, cache)
+        wr_store = MosaicStore(data_root, "wheat_rape", grid_width, cache)
+        joint_kw = dict(
+            root=data_root, rice_store=rice_store, wr_store=wr_store,
+            train_ids=train_ids, context_size=context_size,
+            target_size=int(cfg.data.get("target_size", 256)),
+            normalization=normalization,
+            temporal=str(cfg.data.get("temporal", "dual")),
+            prior=bool(cfg.data.get("prior", False)),
+            grid_width=grid_width,
+        )
+        train_set = MosaicMultiTemporalDataset(records=train_records, augment=True, **joint_kw)
+        val_set = MosaicMultiTemporalDataset(records=val_records, augment=False, **joint_kw)
+    else:
+        store = MosaicStore(data_root, task.domain, grid_width, cache)
+        common = dict(
+            root=data_root, task=task, store=store, context_size=context_size,
+            target_size=int(cfg.data.get("target_size", 256)), normalization=normalization,
+        )
+        train_set = MosaicSegDataset(records=train_records, augment=True, **common)
+        val_set = MosaicSegDataset(records=val_records, augment=False, **common)
     sampler = None
-    if cfg.train.get("bucket_probs"):
+    if cfg.train.get("bucket_probs") and not joint:
         sampler = make_area_sampler(train_set, cfg.train["bucket_probs"])
     workers = int(cfg.train.get("workers", 2))
     train_loader = DataLoader(
@@ -102,6 +125,9 @@ def main() -> None:
 
     resume = Path(args.resume).resolve() if args.resume else None
     model = build_model(cfg.model, task.classes, pretrained=resume is None).cuda()
+    if cfg.model.get("init_first_conv"):
+        init_first_conv(model, int(cfg.model["in_channels"]), int(cfg.model.get("n_img", 3)))
+        print(f"[model] first-conv expanded: in_channels={cfg.model['in_channels']} n_img={cfg.model.get('n_img', 3)}")
     ema = EMA(model, float(cfg.train.get("ema_decay", 0.999)))
     history, global_epoch, best = [], 0, -1.0
     if resume:
