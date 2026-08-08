@@ -1,6 +1,8 @@
 #!/bin/bash
 # Wait for any running finetune_v2 to exit, probe GPU memory for bigger-model
 # configs, then launch the requested model. Appends progress to launch_chain.log.
+# AutoDL public-network accelerator (needed to download Satlas weights from HF).
+source /etc/network_turbo > /dev/null 2>&1
 cd /root/crop_segmentation
 LOG=/root/logs/launch_chain.log
 KEY=$1
