@@ -1,0 +1,8 @@
+[
+  {
+    "arch": "unet",
+    "encoder": "mit_b3",
+    "weight": "/root/crop_segmentation/weights/mosaic2_rice_mit_b3_42_best.pth",
+    "classes": 1
+  }
+]

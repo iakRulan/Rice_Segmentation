@@ -57,25 +57,49 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, scaler, ema,
     model.train()
     optimizer.zero_grad(set_to_none=True)
     total = 0.0
+    skipped = 0
     for step, (images, targets, _) in enumerate(loader):
         images = images.cuda(non_blocking=True)
         targets = targets.cuda(non_blocking=True)
-        with torch.amp.autocast("cuda"):
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             logits = center_crop(model(images), targets)
-            loss = criterion(logits, targets)
-            scaled_loss = loss / accumulation
+        # Keep the model forward in AMP, but do loss reductions in FP32.
+        # Lovasz/top-k reductions and per-image sums can overflow in fp16.
+        with torch.amp.autocast("cuda", enabled=False):
+            loss = criterion(logits.float(), targets.float())
+        if not torch.isfinite(logits).all() or not torch.isfinite(loss):
+            skipped += 1
+            print(f"[skip] nonfinite forward/loss at step={step}", flush=True)
+            optimizer.zero_grad(set_to_none=True)
+            continue
+        scaled_loss = loss / accumulation
         scaler.scale(scaled_loss).backward()
         total += float(loss.detach())
         if (step + 1) % accumulation == 0 or step + 1 == len(loader):
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            old_scale = scaler.get_scale()
+            try:
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), grad_clip, error_if_nonfinite=True
+                )
+            except RuntimeError:
+                skipped += 1
+                print(f"[skip] nonfinite gradient at step={step}", flush=True)
+                # Let GradScaler record the overflow and reduce its scale;
+                # do not advance the scheduler or EMA for a skipped update.
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+                continue
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
-            scheduler.step()
-            ema.update(model)
+            if scaler.get_scale() >= old_scale:
+                scheduler.step()
+                ema.update(model)
+    if skipped:
+        print(f"[stability] skipped_updates={skipped}", flush=True)
     return total / max(1, len(loader))
-
 
 @torch.no_grad()
 def validate(model, loader, state_dict=None) -> ValidationResult:

@@ -1,0 +1,72 @@
+{
+  "name": "satlas_s2res50_rape_512_seed42",
+  "seed": 42,
+  "output_dir": "weights/v2",
+  "data": {
+    "root": "/root/competition_data/public",
+    "task": "rape",
+    "context_size": 512,
+    "target_size": 256,
+    "grid_width": 83,
+    "normalization": "zero_one",
+    "cache": true
+  },
+  "model": {
+    "backend": "satlas",
+    "model_id": "Sentinel2_Resnet50_SI_RGB",
+    "decoder_channels": 128
+  },
+  "train": {
+    "batch_size": 2,
+    "val_batch_size": 2,
+    "accumulation": 2,
+    "workers": 0,
+    "bucket_probs": [
+      0.35,
+      0.25,
+      0.25,
+      0.15
+    ],
+    "ema_decay": 0.999,
+    "weight_decay": 0.0001,
+    "warmup_fraction": 0.1,
+    "grad_clip": 1.0
+  },
+  "loss": {
+    "bce": 1.0,
+    "dice": 1.0,
+    "lovasz": 0.5,
+    "tversky": 0.2,
+    "tversky_alpha": 0.35,
+    "tversky_beta": 0.65,
+    "boundary": 0.1,
+    "focal_gamma": 0.0,
+    "pos_weight": 1.0
+  },
+  "stages": [
+    {
+      "name": "decoder_warmup",
+      "epochs": 3,
+      "lr": 0.0002,
+      "backbone_lr_scale": 0.0,
+      "freeze_backbone": true,
+      "patience": 0
+    },
+    {
+      "name": "full_finetune",
+      "epochs": 24,
+      "lr": 3e-05,
+      "backbone_lr_scale": 0.1,
+      "freeze_backbone": false,
+      "patience": 10
+    },
+    {
+      "name": "low_lr_polish",
+      "epochs": 10,
+      "lr": 1e-05,
+      "backbone_lr_scale": 0.2,
+      "freeze_backbone": false,
+      "patience": 6
+    }
+  ]
+}
