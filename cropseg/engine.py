@@ -52,7 +52,7 @@ def cosine_with_warmup(optimizer, updates: int, warmup_fraction: float = 0.05,
     return torch.optim.lr_scheduler.LambdaLR(optimizer, scale)
 
 
-def train_epoch(model, loader, criterion, optimizer, scheduler, scaler, ema,
+def train_epoch(model, loader, criterion, optimizer, scheduler, ema,
                 accumulation: int, grad_clip: float) -> float:
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -62,41 +62,42 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, scaler, ema,
         images = images.cuda(non_blocking=True)
         targets = targets.cuda(non_blocking=True)
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-            logits = center_crop(model(images), targets)
+            out = model(images)
+            if isinstance(out, (tuple, list)):
+                logits, cls_logits = out
+            else:
+                logits, cls_logits = out, None
+            logits = center_crop(logits, targets)
         # Keep the model forward in AMP, but do loss reductions in FP32.
         # Lovasz/top-k reductions and per-image sums can overflow in fp16.
         with torch.amp.autocast("cuda", enabled=False):
-            loss = criterion(logits.float(), targets.float())
+            loss = criterion(logits.float(), targets.float(), cls_logits)
         if not torch.isfinite(logits).all() or not torch.isfinite(loss):
             skipped += 1
             print(f"[skip] nonfinite forward/loss at step={step}", flush=True)
             optimizer.zero_grad(set_to_none=True)
             continue
-        scaled_loss = loss / accumulation
-        scaler.scale(scaled_loss).backward()
+        (loss / accumulation).backward()
         total += float(loss.detach())
         if (step + 1) % accumulation == 0 or step + 1 == len(loader):
-            scaler.unscale_(optimizer)
-            old_scale = scaler.get_scale()
             try:
-                grad_norm = torch.nn.utils.clip_grad_norm_(
+                torch.nn.utils.clip_grad_norm_(
                     model.parameters(), grad_clip, error_if_nonfinite=True
                 )
             except RuntimeError:
+                # clip_grad_norm_ raises only *after* finding a non-finite grad.
+                # We must NOT optimizer.step(): stepping now would write inf/NaN
+                # into the weights and silently poison the rest of training
+                # (the old code called scaler.step() here, which with a disabled
+                # GradScaler is a bare optimizer.step() — a real corruption bug).
                 skipped += 1
                 print(f"[skip] nonfinite gradient at step={step}", flush=True)
-                # Let GradScaler record the overflow and reduce its scale;
-                # do not advance the scheduler or EMA for a skipped update.
-                scaler.step(optimizer)
-                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
                 continue
-            scaler.step(optimizer)
-            scaler.update()
+            optimizer.step()
             optimizer.zero_grad(set_to_none=True)
-            if scaler.get_scale() >= old_scale:
-                scheduler.step()
-                ema.update(model)
+            scheduler.step()
+            ema.update(model)
     if skipped:
         print(f"[stability] skipped_updates={skipped}", flush=True)
     return total / max(1, len(loader))
@@ -112,7 +113,10 @@ def validate(model, loader, state_dict=None) -> ValidationResult:
     for images, truth, _ in loader:
         images = images.cuda(non_blocking=True)
         with torch.amp.autocast("cuda"):
-            logits = center_crop(model(images), truth)
+            out = model(images)
+            if isinstance(out, (tuple, list)):
+                out = out[0]
+            logits = center_crop(out, truth)
         probabilities.append(torch.sigmoid(logits).float().cpu().numpy())
         targets.append(truth.numpy())
     probabilities = np.concatenate(probabilities)

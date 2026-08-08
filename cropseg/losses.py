@@ -25,15 +25,17 @@ class SegmentationLoss(nn.Module):
         super().__init__()
         supported = {
             "bce", "dice", "lovasz", "iou", "tversky", "focal_gamma",
-            "pos_weight", "tversky_alpha", "tversky_beta", "tversky_gamma", "smooth"
+            "pos_weight", "tversky_alpha", "tversky_beta", "tversky_gamma", "smooth",
+            "cls",
         }
         base_args = {key: value for key, value in config.items() if key in supported}
         self.region = MultiTaskLoss(**base_args)
         self.boundary_weight = float(config.get("boundary", 0.0))
         self.boundary = BoundaryConsistencyLoss()
 
-    def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        loss = self.region(logits, target)
+    def forward(self, logits: torch.Tensor, target: torch.Tensor,
+                cls_logits: torch.Tensor | None = None) -> torch.Tensor:
+        loss = self.region(logits, target, cls_logits)
         if self.boundary_weight:
             loss = loss + self.boundary(logits, target) * self.boundary_weight
         return loss

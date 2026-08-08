@@ -23,7 +23,7 @@ def mean_iou(probabilities: np.ndarray, targets: np.ndarray,
 
 
 def search_threshold(probabilities: np.ndarray, targets: np.ndarray,
-                     low: float = 0.30, high: float = 0.70,
+                     low: float = 0.15, high: float = 0.85,
                      step: float = 0.01) -> tuple[float, float]:
     best_score, best_threshold = -1.0, 0.5
     for threshold in np.arange(low, high + step / 2, step):

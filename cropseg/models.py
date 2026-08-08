@@ -7,11 +7,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class AuxClassifier(nn.Module):
+    """Image-level "has object" head on the deepest encoder feature.
+
+    Shares the encoder with the segmentation decoder, so it is both a regularizer
+    and a free empty-image discriminator. smp exposes the same thing via
+    ``aux_params``; SatlasSegmenter gets a manual copy.
+    """
+
+    def __init__(self, in_channels: int, classes: int, dropout: float = 0.3):
+        super().__init__()
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.drop = nn.Dropout2d(dropout)
+        self.fc = nn.Conv2d(in_channels, classes, 1)
+
+    def forward(self, feature: torch.Tensor) -> torch.Tensor:
+        return self.fc(self.drop(self.pool(feature))).flatten(1)
+
+
 class SatlasSegmenter(nn.Module):
     """Satlas pretrained backbone+FPN with a lightweight logit decoder."""
 
     def __init__(self, model_id: str, classes: int, decoder_channels: int = 128,
-                 pretrained: bool = True):
+                 pretrained: bool = True, aux: bool = False, aux_dropout: float = 0.3):
         super().__init__()
         try:
             import satlaspretrain_models as satlas
@@ -40,6 +58,9 @@ class SatlasSegmenter(nn.Module):
             nn.Dropout2d(0.1),
             nn.Conv2d(decoder_channels, classes, 1),
         )
+        self.aux = aux
+        if aux:
+            self.cls_head = AuxClassifier(128, classes, aux_dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.foundation(x)
@@ -47,7 +68,10 @@ class SatlasSegmenter(nn.Module):
         fused = features[0]
         for feature in features[1:]:
             fused = fused + F.interpolate(feature, size=size, mode="bilinear", align_corners=False)
-        return self.decoder(fused / len(features))
+        seg = self.decoder(fused / len(features))
+        if self.aux:
+            return seg, self.cls_head(fused)
+        return seg
 
     def backbone_parameters(self) -> Iterable[nn.Parameter]:
         return self.foundation.backbone.parameters()
@@ -59,7 +83,8 @@ class SatlasSegmenter(nn.Module):
 
 class SMPModel(nn.Module):
     def __init__(self, architecture: str, encoder: str, classes: int,
-                 encoder_weights: str | None = "imagenet"):
+                 encoder_weights: str | None = "imagenet",
+                 aux: bool = False, aux_dropout: float = 0.3):
         super().__init__()
         import segmentation_models_pytorch as smp
         table = {
@@ -69,10 +94,13 @@ class SMPModel(nn.Module):
             "fpn": smp.FPN,
             "manet": smp.MAnet,
         }
-        self.net = table[architecture](
+        kw = dict(
             encoder_name=encoder, encoder_weights=encoder_weights,
-            in_channels=3, classes=classes, activation=None
+            in_channels=3, classes=classes, activation=None,
         )
+        if aux:
+            kw["aux_params"] = dict(classes=classes, dropout=aux_dropout, pooling="avg")
+        self.net = table[architecture](**kw)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
@@ -87,16 +115,19 @@ class SMPModel(nn.Module):
 
 def build_model(config: dict, classes: int, pretrained: bool = True) -> nn.Module:
     backend = config["backend"]
+    aux = bool(config.get("aux", False))
+    aux_dropout = float(config.get("aux_dropout", 0.3))
     if backend == "satlas":
         return SatlasSegmenter(
             config["model_id"], classes,
             decoder_channels=int(config.get("decoder_channels", 128)),
-            pretrained=pretrained,
+            pretrained=pretrained, aux=aux, aux_dropout=aux_dropout,
         )
     if backend == "smp":
         return SMPModel(
             config.get("architecture", "unet"), config["encoder"], classes,
             config.get("encoder_weights", "imagenet") if pretrained else None,
+            aux=aux, aux_dropout=aux_dropout,
         )
     raise ValueError(f"unknown backend: {backend}")
 

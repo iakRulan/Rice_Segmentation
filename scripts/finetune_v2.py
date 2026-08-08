@@ -120,7 +120,6 @@ def main() -> None:
     accumulation = int(cfg.train.get("accumulation", 1))
     grad_clip = float(cfg.train.get("grad_clip", 1.0))
     weight_decay = float(cfg.train.get("weight_decay", 1e-4))
-    scaler = torch.amp.GradScaler("cuda", enabled=False)
 
     stop_all = False
     for stage_index, stage in enumerate(cfg.stages):
@@ -139,7 +138,7 @@ def main() -> None:
             global_epoch += 1
             started = time.time()
             loss = train_epoch(
-                model, train_loader, criterion, optimizer, scheduler, scaler, ema,
+                model, train_loader, criterion, optimizer, scheduler, ema,
                 accumulation, grad_clip,
             )
             result = validate(model, val_loader, ema.state_dict())

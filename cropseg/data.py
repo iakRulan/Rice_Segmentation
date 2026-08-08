@@ -67,7 +67,11 @@ class MosaicStore:
             for dx in (-1, 0, 1):
                 rr, cc = row + dy, col + dx
                 neighbor = rr * self.grid_width + cc + 1
-                invalid = rr < 0 or cc < 0 or cc >= self.grid_width
+                # A single membership test covers every out-of-grid case the old
+                # code missed (rr >= n_rows at the bottom edge, plus any tile id
+                # that simply does not exist in the store). Missing neighbors
+                # fall back to the center tile instead of fabricating context.
+                invalid = neighbor not in self.paths
                 cells.append(center if invalid else self.get(neighbor, center))
             rows.append(np.concatenate(cells, axis=1))
         mosaic = np.concatenate(rows, axis=0)
