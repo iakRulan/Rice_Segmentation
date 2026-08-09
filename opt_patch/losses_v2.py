@@ -110,7 +110,11 @@ class MultiTaskLoss(nn.Module):
         self.w = dict(bce=bce, dice=dice, lovasz=lovasz, iou=iou,
                       tversky=tversky, cls=cls)
         self.focal_gamma = focal_gamma
-        self.pos_weight = pos_weight
+        # pos_weight may be a scalar (uniform across classes) or a per-class
+        # list (C,) for multi-class tasks with unbalanced positive fractions.
+        self.pos_weight = (torch.tensor(pos_weight, dtype=torch.float32)
+                           if isinstance(pos_weight, (list, tuple))
+                           else pos_weight)
         self.tv = (tversky_alpha, tversky_beta, tversky_gamma)
         self.smooth = smooth
         self._bce = nn.BCEWithLogitsLoss(reduction='none')
@@ -118,7 +122,10 @@ class MultiTaskLoss(nn.Module):
     def pointwise(self, logits, target):
         """逐像素 BCE（可加 focal / pos_weight），但按图平均而非全局平均。"""
         bce = self._bce(logits, target)
-        if self.pos_weight != 1.0:
+        if torch.is_tensor(self.pos_weight):
+            pw = self.pos_weight.to(bce.device).reshape(1, -1, 1, 1)
+            bce = bce * (target * pw + (1.0 - target))
+        elif self.pos_weight != 1.0:
             bce = bce * (target * self.pos_weight + (1.0 - target))
         if self.focal_gamma > 0:
             prob = torch.sigmoid(logits)
