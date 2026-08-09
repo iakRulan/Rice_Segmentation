@@ -1,0 +1,57 @@
+{
+  "name": "joint_256_6ch_f0",
+  "seed": 42,
+  "output_dir": "weights/joint",
+  "data": {
+    "root": "data/public",
+    "task": "joint",
+    "fold_file": "data/public/folds/folds_iso5.json",
+    "fold": 0,
+    "context_size": 256,
+    "target_size": 256,
+    "grid_width": 83,
+    "cache": false,
+    "temporal": "dual",
+    "prior": false
+  },
+  "model": {
+    "backend": "smp",
+    "architecture": "unet",
+    "encoder": "mit_b3",
+    "encoder_weights": "imagenet",
+    "in_channels": 6,
+    "n_img": 6,
+    "aux": true,
+    "init_first_conv": true
+  },
+  "train": {
+    "batch_size": 8,
+    "val_batch_size": 8,
+    "accumulation": 1,
+    "workers": 6,
+    "ema_decay": 0.999,
+    "weight_decay": 0.0001,
+    "warmup_fraction": 0.1,
+    "grad_clip": 1.0
+  },
+  "loss": {
+    "bce": 1.0,
+    "dice": 1.0,
+    "lovasz": 0.5,
+    "tversky": 0.2,
+    "tversky_alpha": 0.35,
+    "tversky_beta": 0.65,
+    "boundary": 0.1,
+    "cls": 0.5
+  },
+  "stages": [
+    {
+      "name": "full",
+      "epochs": 30,
+      "lr": 0.0003,
+      "backbone_lr_scale": 0.1,
+      "freeze_backbone": false,
+      "patience": 8
+    }
+  ]
+}
