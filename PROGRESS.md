@@ -8,7 +8,10 @@
 - **GitHub 远程同步**：通过 GitHub Token 免密通道打通推送，代码已同步最新微调配置与执行脚本。
 - **远程算力部署**：远程 RTX 3080 Ti 节点（`connect.westb.seetacloud.com:42734`）配置 PyTorch 2.6.0+cu124 与 SMP 全套依赖。
 - **数据全量挂载**：`public.zip` 已全量传输并在远程 `/root/autodl-tmp/data/public` 完成解压挂载。
-- **首轮训练落地**：基于形态学边缘差分边界感知损失（`BoundaryConsistencyLoss`，权重 0.2）+ Lovasz 复合损失的 `opt_wr_boundary_mitb3` 模型已在 RTX 3080 Ti 上完成第 1 周期收敛，成功保存 `best.pth`（379 MB）与 `history.json`，全量 40 周期微调全速推进中。
+- **边界感知微调收敛追踪**：基于形态学边缘差分边界感知损失（`BoundaryConsistencyLoss`，权重 0.2）+ Lovasz 复合损失的 `opt_wr_boundary_mitb3` 模型在 RTX 3080 Ti 上持续加速收敛：
+  - **Epoch 1**：`loss=2.1817 fixed=0.0565 tuned=0.4872@0.71` (耗时 111s)
+  - **Epoch 2**：`loss=1.2627 fixed=0.1244 tuned=0.4872@0.62` (耗时 116s，Loss 骤降 42%，fixed IoU 提升 +120%)
+  - 模型权重与历史记录自动同步至 `/root/autodl-tmp/weights/opt_boundary/opt_wr_boundary_mitb3/`，全量 40 周期微调持续推进。
 
 ## ⚠️ 前提证伪 + 新管线复现验证（2026-08-09，用户 review 二次驱动）
 
