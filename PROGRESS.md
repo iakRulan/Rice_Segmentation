@@ -16,7 +16,8 @@
   - 最优模型权重（379 MB）已完整归档至 `/root/autodl-tmp/weights/opt_boundary/opt_wr_boundary_mitb3/best.pth`。
 - **水稻（rice）边界感知微调收敛追踪**：基于形态学边缘差分边界损失的 `opt_rice_boundary_mitb3` 独立会话在 RTX 3080 Ti 上持续加速推进：
   - **Epoch 1**：`loss=1.8219 fixed=0.2812 tuned=0.3617@0.40 best=0.2812` (耗时 88s)
-  - **Epoch 2（损失破 1.0，指标跃升）**：`loss=0.9711 fixed=0.3230 tuned=0.4635@0.45 best=0.3230` (耗时 74s，Loss 骤降 47%，调优 IoU 单轮暴增 +0.10)
+  - **Epoch 2**：`loss=0.9711 fixed=0.3230 tuned=0.4635@0.45 best=0.3230` (耗时 74s，Loss 骤降 47%)
+  - **Epoch 3（水稻单模型暴增突破）**：`loss=0.8826 fixed=0.7220 tuned=0.7485@0.46 best=0.7220` (耗时 73s，固定 IoU 由 0.3230 暴增至 0.7220，调优 IoU 达 0.7485)
   - 最优模型权重（379 MB）与历史记录自动同步至 `/root/autodl-tmp/weights/opt_boundary/opt_rice_boundary_mitb3/`，40 周期全量微调全速推进中。
 
 ## ⚠️ 前提证伪 + 新管线复现验证（2026-08-09，用户 review 二次驱动）
