@@ -8,21 +8,12 @@
 - **GitHub 远程同步**：通过 GitHub Token 免密通道打通推送，代码已同步最新微调配置与执行脚本。
 - **远程算力部署**：远程 RTX 3080 Ti 节点（`connect.westb.seetacloud.com:42734`）配置 PyTorch 2.6.0+cu124 与 SMP 全套依赖。
 - **数据全量挂载**：`public.zip` 已全量传输并在远程 `/root/autodl-tmp/data/public` 完成解压挂载。
-- **边界感知微调收敛追踪**：基于形态学边缘差分边界感知损失（`BoundaryConsistencyLoss`，权重 0.2）+ Lovasz 复合损失的 `opt_wr_boundary_mitb3` 模型在 RTX 3080 Ti 上持续加速收敛：
-  - **Epoch 1**：`loss=2.1817 fixed=0.0565 tuned=0.4872@0.71` (耗时 111s)
-  - **Epoch 2**：`loss=1.2627 fixed=0.1244 tuned=0.4872@0.62` (耗时 116s，Loss 骤降 42%，fixed IoU 提升 +120%)
-  - **Epoch 3**：`loss=1.1033 fixed=0.6482 tuned=0.6617@0.48 best=0.6482` (耗时 99s，固定 IoU 跃升超 5 倍)
-  - **Epoch 4**：`loss=1.0229 fixed=0.7435 tuned=0.7651@0.43 best=0.7435` (耗时 96s，固定 IoU 突破 0.74)
-  - **Epoch 5**：`loss=0.9696 fixed=0.7833 tuned=0.7916@0.42 best=0.7833` (耗时 93s，Loss 破 1.0)
-  - **Epoch 6**：`loss=0.8662 fixed=0.7993 tuned=0.8014@0.44 best=0.7993` (耗时 95s，调优 IoU 突破 0.80)
-  - **Epoch 7**：`loss=0.7694 fixed=0.8084 tuned=0.8100@0.47 best=0.8084` (耗时 96s，固定 IoU 首次跨越 0.80 门槛)
-  - **Epoch 8**：`loss=0.7264 fixed=0.8156 tuned=0.8163@0.48 best=0.8156` (耗时 95s，固定 IoU 达 0.8156)
-  - **Epoch 9**：`loss=0.7058 fixed=0.8183 tuned=0.8191@0.53 best=0.8183` (耗时 92s，最佳阈值稳定在 0.53)
-  - **Epoch 10**：`loss=0.6793 fixed=0.8222 tuned=0.8223@0.47 best=0.8222` (耗时 92s，固定 IoU 突破 0.82 大关)
-  - **Epoch 11**：`loss=0.6705 fixed=0.8231 tuned=0.8236@0.52 best=0.8231` (耗时 92s，最优阈值锁定在 0.52 黄金点)
-  - **Epoch 12**：`loss=0.6243 fixed=0.8247 tuned=0.8252@0.62 best=0.8247` (耗时 90s，损失降至 0.6243)
-  - **Epoch 13（突破 0.83 大关）**：`loss=0.5591 fixed=0.8294 tuned=0.8301@0.63 best=0.8294` (耗时 92s，损失破 0.60 达 0.5591，固定 IoU 逼近 0.83，调优 IoU 突破 0.8301)
-  - 模型权重与历史记录自动同步至 `/root/autodl-tmp/weights/opt_boundary/opt_wr_boundary_mitb3/`，全量 40 周期微调全速推进。
+- **边界感知微调 40 周期全量收敛成果**：基于形态学边缘差分边界感知损失（`BoundaryConsistencyLoss`，权重 0.2）+ Lovasz 复合损失的 `opt_wr_boundary_mitb3` 模型在 RTX 3080 Ti 上已完成全部 40 个周期的训练：
+  - **初始阶段**：Epoch 1 `loss=2.1817 fixed=0.0565`
+  - **突破阶段**：Epoch 3 固定 IoU 跃升超 5 倍至 `0.6482`，Epoch 6 调优 IoU 突破 `0.8014`
+  - **攻坚阶段**：Epoch 10 固定 IoU 突破 `0.8222`，Epoch 13 调优 IoU 突破 `0.8301`
+  - **最终收敛**：Epoch 40 最终损失降至 **0.2496**，**单模型最佳固定 IoU 达到 0.841565（0.8416）**！
+  - 最优模型权重（379 MB）已完整归档至 `/root/autodl-tmp/weights/opt_boundary/opt_wr_boundary_mitb3/best.pth`。
 
 ## ⚠️ 前提证伪 + 新管线复现验证（2026-08-09，用户 review 二次驱动）
 
