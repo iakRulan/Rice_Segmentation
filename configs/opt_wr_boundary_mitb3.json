@@ -1,0 +1,48 @@
+{
+  "name": "opt_wr_boundary_mitb3",
+  "seed": 42,
+  "output_dir": "/root/autodl-tmp/weights/opt_boundary",
+  "data": {
+    "root": "data/public",
+    "task": "wheat_rape",
+    "context_size": 256,
+    "target_size": 256,
+    "normalization": "imagenet",
+    "cache": false
+  },
+  "model": {
+    "backend": "smp",
+    "architecture": "unet",
+    "encoder": "mit_b3",
+    "encoder_weights": "imagenet",
+    "in_channels": 3,
+    "n_img": 3,
+    "aux": false
+  },
+  "train": {
+    "batch_size": 16,
+    "val_batch_size": 16,
+    "accumulation": 1,
+    "workers": 4,
+    "ema_decay": 0.999,
+    "weight_decay": 0.0001,
+    "warmup_fraction": 0.05,
+    "grad_clip": 1.0
+  },
+  "loss": {
+    "bce": 1.0,
+    "dice": 1.0,
+    "lovasz": 0.5,
+    "boundary": 0.2
+  },
+  "stages": [
+    {
+      "name": "full",
+      "epochs": 40,
+      "lr": 0.0003,
+      "backbone_lr_scale": 0.1,
+      "freeze_backbone": false,
+      "patience": 15
+    }
+  ]
+}
