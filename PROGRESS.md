@@ -4,6 +4,12 @@
 
 > **重要约束**：每天只有一次提交机会。策略 = 持续迭代训练/集成，直到诚实 val 明确足够（预估线上 ≥90）再提交。**教训：trainplus（train+85%val）模型的 val 分全部污染，只有 train-only 模型的 val 可信。**
 
+## 🚀 边界感知损失优化与远程训练就绪（2026-09-03，冲刺 0.97 目标）
+- **GitHub 远程同步**：通过 GitHub Token 免密通道打通推送，代码已同步最新微调配置与执行脚本。
+- **远程算力部署**：远程 RTX 3080 Ti 节点（`connect.westb.seetacloud.com:42734`）配置 PyTorch 2.6.0+cu124 与 SMP 全套依赖。
+- **数据全量挂载**：`public.zip` 已全量传输并在远程 `/root/autodl-tmp/data/public` 完成解压挂载。
+- **首轮训练落地**：基于形态学边缘差分边界感知损失（`BoundaryConsistencyLoss`，权重 0.2）+ Lovasz 复合损失的 `opt_wr_boundary_mitb3` 模型已在 RTX 3080 Ti 上完成第 1 周期收敛，成功保存 `best.pth`（379 MB）与 `history.json`，全量 40 周期微调全速推进中。
+
 ## ⚠️ 前提证伪 + 新管线复现验证（2026-08-09，用户 review 二次驱动）
 
 **前提验证（`tests/verify_premises.py`，本地 4 分钟）——两个核心前提全部不成立**：
