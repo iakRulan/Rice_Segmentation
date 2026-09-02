@@ -14,7 +14,8 @@
   - **Epoch 3**：`loss=1.1033 fixed=0.6482 tuned=0.6617@0.48 best=0.6482` (耗时 99s，固定 IoU 跃升超 5 倍)
   - **Epoch 4**：`loss=1.0229 fixed=0.7435 tuned=0.7651@0.43 best=0.7435` (耗时 96s，固定 IoU 突破 0.74)
   - **Epoch 5**：`loss=0.9696 fixed=0.7833 tuned=0.7916@0.42 best=0.7833` (耗时 93s，Loss 破 1.0)
-  - **Epoch 6（突破 0.80 关口）**：`loss=0.8662 fixed=0.7993 tuned=0.8014@0.44 best=0.7993` (耗时 95s，调优 IoU 正式突破 0.80 大关，损失降至 0.8662)
+  - **Epoch 6**：`loss=0.8662 fixed=0.7993 tuned=0.8014@0.44 best=0.7993` (耗时 95s，调优 IoU 突破 0.80)
+  - **Epoch 7（固定 IoU 突破 0.80 达 0.8084）**：`loss=0.7694 fixed=0.8084 tuned=0.8100@0.47 best=0.8084` (耗时 96s，损失进一步骤降至 0.7694，fixed IoU 首次跨越 0.80 门槛)
   - 模型权重与历史记录自动同步至 `/root/autodl-tmp/weights/opt_boundary/opt_wr_boundary_mitb3/`，全量 40 周期微调全速推进。
 
 ## ⚠️ 前提证伪 + 新管线复现验证（2026-08-09，用户 review 二次驱动）
