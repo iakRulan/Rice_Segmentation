@@ -11,7 +11,8 @@
 - **边界感知微调收敛追踪**：基于形态学边缘差分边界感知损失（`BoundaryConsistencyLoss`，权重 0.2）+ Lovasz 复合损失的 `opt_wr_boundary_mitb3` 模型在 RTX 3080 Ti 上持续加速收敛：
   - **Epoch 1**：`loss=2.1817 fixed=0.0565 tuned=0.4872@0.71` (耗时 111s)
   - **Epoch 2**：`loss=1.2627 fixed=0.1244 tuned=0.4872@0.62` (耗时 116s，Loss 骤降 42%，fixed IoU 提升 +120%)
-  - 模型权重与历史记录自动同步至 `/root/autodl-tmp/weights/opt_boundary/opt_wr_boundary_mitb3/`，全量 40 周期微调持续推进。
+  - **Epoch 3（重大突破）**：`loss=1.1033 fixed=0.6482 tuned=0.6617@0.48 best=0.6482` (耗时 99s，固定 IoU 跃升超 5 倍，最佳阈值稳定在 0.48)
+  - 模型权重与历史记录自动同步至 `/root/autodl-tmp/weights/opt_boundary/opt_wr_boundary_mitb3/`，全量 40 周期微调全速推进。
 
 ## ⚠️ 前提证伪 + 新管线复现验证（2026-08-09，用户 review 二次驱动）
 
